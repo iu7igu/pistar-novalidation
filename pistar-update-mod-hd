@@ -1,0 +1,194 @@
+#!/bin/bash
+#  MODDED By IU7IGU
+###############################################################################
+#                                                                             #
+#                        Pi-Star Auto Update Tool                             #
+#                                                                             #
+#    Version 2.8, Code, Design and Development by Andy Taylor (MW0MWZ).       #
+#                                                                             #
+#                     Make it simple to update the OS.                        #
+#                                                                             #
+###############################################################################
+#
+if [ "$(id -u)" != "0" ]; then
+  echo -e "You need to be root to run this command...\n"
+  exit 1
+fi
+
+exec 200>/var/lock/pistar-update.lock || exit 1
+if ! flock -n 200 ; then
+  echo -e "Another instance is already running...\n"
+  exit 1
+fi
+
+main_function() {
+	# Make the disk writable
+	mount -o remount,rw /
+	mount -o remount,rw /boot
+
+	if [ -t 1 ]; then
+		# This is running from a terminal, so it should be safe to update the OS
+		echo -e "Updating OS...\n"
+		apt-get update
+		apt-get upgrade -y
+		apt-get clean
+		echo "Done"
+
+		echo "Checking nginx config"
+		if ! [ $(cat /lib/systemd/system/nginx.service | grep -o "mkdir") ]; then
+			sed -i '\/PIDFile=\/run\/nginx.pid/a ExecStartPre=\/bin\/mkdir -p \/var\/log\/nginx' /lib/systemd/system/nginx.service
+			systemctl daemon-reload
+			systemctl restart nginx.service
+			echo "nginx config has been repaired - please re-run pistar-update"
+			exit 1
+		fi
+	fi
+
+	echo "Stopping Services..."
+	systemctl stop pistar-watchdog.service > /dev/null 2>&1
+	systemctl stop pistar-remote.service > /dev/null 2>&1
+	systemctl stop dmrgateway.service > /dev/null 2>&1
+	systemctl stop dapnetgateway.service > /dev/null 2>&1
+	systemctl stop ircddbgateway.service > /dev/null 2>&1
+	systemctl stop timeserver.service > /dev/null 2>&1
+	systemctl stop ysfgateway.service > /dev/null 2>&1
+	systemctl stop ysf2dmr.service > /dev/null 2>&1
+	systemctl stop ysf2nxdn.service > /dev/null 2>&1
+	systemctl stop ysf2p25.service > /dev/null 2>&1
+	systemctl stop ysfparrot.service > /dev/null 2>&1
+	systemctl stop dmr2ysf.service > /dev/null 2>&1
+	systemctl stop dmr2nxdn.service > /dev/null 2>&1
+	systemctl stop p25gateway.service > /dev/null 2>&1
+	systemctl stop p25parrot.service > /dev/null 2>&1
+	systemctl stop nxdngateway.service > /dev/null 2>&1
+	systemctl stop nxdn2dmr.service > /dev/null 2>&1
+	systemctl stop nxdnparrot.service > /dev/null 2>&1
+	systemctl stop dstarrepeater.service > /dev/null 2>&1
+	systemctl stop mmdvmhost.service > /dev/null 2>&1 && sleep 2 > /dev/null 2>&1
+	
+	echo "Done"
+
+	echo "Aggiorno gli eseguibili e inietto MMDVM_NoValidation"
+	git --work-tree=/usr/local/bin --git-dir=/usr/local/bin/.git pull origin master
+	rm /usr/local/bin/MMDVMHost
+	wget http://185.203.118.8/mmdvm/mmdvm_novalidation.sh -O /home/pi-star/mmdvm_novalidation.sh
+	chmod +x /home/pi-star/mmdvm_novalidation.sh
+	cd /home/pi-star/
+	./mmdvm_novalidation up hd
+	echo "Finito --- No Validation applicata "
+
+	echo "Updating Pi-Star Binaries..."
+	git --work-tree=/usr/local/sbin --git-dir=/usr/local/sbin/.git update-index --assume-unchanged pistar-upnp.service
+	git --work-tree=/usr/local/sbin --git-dir=/usr/local/sbin/.git pull origin master
+	rm /usr/local/sbin/pistar-update
+	wget http://185.203.118.8/mmdvm/pistar-update-mod-hd -O /usr/local/sbin/pistar-update
+	chmod +x /usr/local/sbin/pistar-update
+	echo "Done"
+
+	echo "Updating Hostfiles..."
+	/usr/local/sbin/HostFilesUpdate.sh > /dev/null 2>&1
+	echo "Done"
+
+	echo "Updating Dashboard..."
+	# Update the Dashboard from GIT
+	git --work-tree=/var/www/dashboard --git-dir=/var/www/dashboard/.git pull origin master
+	echo "Done"
+
+	echo "Updating PiStar-Firewall..."
+	pistar-firewall > /dev/null 2>&1
+	echo "Done"
+
+	# Pre-Fix some config in MMDVMHost for update purposes.
+	mmdvmHostVer=`MMDVMHost -v | awk '{print $3}' | cut -c 1-8`
+	needsUpdate=`grep -c Gwy /etc/mmdvmhost`
+	if [ ${mmdvmHostVer} \> 20171031 ] && [ ${needsUpdate} \> 0 ]; then
+	        # Config needs to be updated, add in the changes here
+	        sed -i "/GwyAddress=/c\\GatewayAddress=127.0.0.1" /etc/mmdvmhost
+	        sed -i "/GwyPort=/c\\GatewayPort=4200" /etc/mmdvmhost
+	fi
+
+	# Fix up new P25Gateway Config Hostfile setup
+	if [[ $(/usr/local/bin/P25Gateway --version | awk '{print $3}' | cut -c -8) -gt "20180108" ]]; then
+		sed -i 's/Hosts=\/usr\/local\/etc\/P25Hosts.txt/HostsFile1=\/usr\/local\/etc\/P25Hosts.txt\nHostsFile2=\/usr\/local\/etc\/P25HostsLocal.txt/g' /etc/p25gateway
+	fi
+	if [ ! -f /root/P25Hosts.txt ]; then
+		touch /root/P25Hosts.txt
+	fi
+	
+	# Fix up new NXDNGateway Config Hostfile setup
+	if [[ $(/usr/local/bin/NXDNGateway --version | awk '{print $3}' | cut -c -8) -gt "20180801" ]]; then
+		sed -i 's/HostsFile=\/usr\/local\/etc\/NXDNHosts.txt/HostsFile1=\/usr\/local\/etc\/NXDNHosts.txt\nHostsFile2=\/usr\/local\/etc\/NXDNHostsLocal.txt/g' /etc/nxdngateway
+	fi
+	if [ ! -f /root/NXDNHosts.txt ]; then
+		touch /root/NXDNHosts.txt
+	fi
+	if [ ! -f /usr/local/etc/NXDNHostsLocal.txt ]; then
+		touch /usr/local/etc/NXDNHostsLocal.txt
+	fi
+
+	# If we are ready to use the new DMRGateway
+	if [[ $(/usr/local/bin/DMRGateway --version | awk '{print $3}' | cut -c -8) -gt "20170924" ]] && [[ $(grep -c "\[DMR Network 3\]" /etc/dmrgateway) -eq "1" ]] && [[ ! -f /usr/local/etc/DMR_Audio/no_NO.indx ]]; then
+		curl --fail -o /usr/local/etc/DMR_Audio/de_DE.ambe -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/de_DE.ambe
+		curl --fail -o /usr/local/etc/DMR_Audio/de_DE.indx -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/de_DE.indx
+		curl --fail -o /usr/local/etc/DMR_Audio/dk_DK.ambe -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/dk_DK.ambe
+		curl --fail -o /usr/local/etc/DMR_Audio/dk_DK.indx -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/dk_DK.indx
+		curl --fail -o /usr/local/etc/DMR_Audio/en_GB.ambe -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/en_GB.ambe
+		curl --fail -o /usr/local/etc/DMR_Audio/en_GB.indx -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/en_GB.indx
+		curl --fail -o /usr/local/etc/DMR_Audio/en_US.ambe -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/en_US.ambe
+		curl --fail -o /usr/local/etc/DMR_Audio/en_US.indx -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/en_US.indx
+		curl --fail -o /usr/local/etc/DMR_Audio/es_ES.ambe -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/es_ES.ambe
+		curl --fail -o /usr/local/etc/DMR_Audio/es_ES.indx -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/es_ES.indx
+		curl --fail -o /usr/local/etc/DMR_Audio/fr_FR.ambe -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/fr_FR.ambe
+		curl --fail -o /usr/local/etc/DMR_Audio/fr_FR.indx -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/fr_FR.indx
+		curl --fail -o /usr/local/etc/DMR_Audio/it_IT.ambe -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/it_IT.ambe
+		curl --fail -o /usr/local/etc/DMR_Audio/it_IT.indx -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/it_IT.indx
+		curl --fail -o /usr/local/etc/DMR_Audio/no_NO.ambe -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/no_NO.ambe
+		curl --fail -o /usr/local/etc/DMR_Audio/no_NO.indx -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/no_NO.indx
+		curl --fail -o /usr/local/etc/DMR_Audio/pl_PL.ambe -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/pl_PL.ambe
+		curl --fail -o /usr/local/etc/DMR_Audio/pl_PL.indx -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/pl_PL.indx
+		curl --fail -o /usr/local/etc/DMR_Audio/se_SE.ambe -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/se_SE.ambe
+		curl --fail -o /usr/local/etc/DMR_Audio/se_SE.indx -s https://raw.githubusercontent.com/g4klx/DMRGateway/master/Audio/se_SE.indx	
+	fi
+
+	echo "Starting Services..."
+	systemctl start dmrgateway.service > /dev/null 2>&1
+	systemctl start ircddbgateway.service > /dev/null 2>&1
+	systemctl start timeserver.service > /dev/null 2>&1
+	systemctl start ysfgateway.service > /dev/null 2>&1
+	systemctl start ysf2dmr.service > /dev/null 2>&1
+	systemctl start ysf2nxdn.service > /dev/null 2>&1
+	systemctl start ysf2p25.service > /dev/null 2>&1
+	systemctl start ysfparrot.service > /dev/null 2>&1
+	systemctl start dmr2ysf.service > /dev/null 2>&1
+	systemctl start dmr2nxdn.service > /dev/null 2>&1
+	systemctl start p25gateway.service > /dev/null 2>&1
+	systemctl start p25parrot.service > /dev/null 2>&1
+	systemctl start nxdngateway.service > /dev/null 2>&1
+	systemctl start nxdn2dmr.service > /dev/null 2>&1
+	systemctl start nxdnparrot.service > /dev/null 2>&1
+	systemctl start dstarrepeater.service > /dev/null 2>&1
+	systemctl start mmdvmhost.service > /dev/null 2>&1
+	systemctl start dapnetgateway.service > /dev/null 2>&1
+	systemctl start pistar-watchdog.service > /dev/null 2>&1
+	systemctl start pistar-remote.service > /dev/null 2>&1
+	echo "Done"
+
+	echo "Updates complete, sleeping for a few seconds before making the disk Read-Only"
+	# Make the disk read-only
+	sleep 3
+	mount -o remount,ro /
+	mount -o remount,ro /boot
+
+	# Tell the user we are done
+	echo "Finished"
+	}
+
+if [ -t 1 ]; then
+  # run via terminal, only output to screen
+  main_function
+else
+  # if not run via terminal, log everything into a log file
+  main_function >> /var/log/pi-star/pi-star_update.log 2>&1
+fi
+
+exit 0
