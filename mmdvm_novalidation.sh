@@ -34,7 +34,7 @@ pistar-reset(){
 	systemctl start mmdvmhost.timer
 	systemctl start mmdvmhost
 	echo "Processi di PI-STAR riavviati"
-	
+	}
 
 mmdvm_novalidation(){
 	systemctl stop pistar-watchdog.timer
