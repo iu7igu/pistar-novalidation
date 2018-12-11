@@ -74,7 +74,7 @@ main_function() {
 	if [ -f /home/pi-star/mmdvm_novalidation.sh]; then
 		rm /home/pi-star/mmdvm_novalidation.sh
 	fi
-	wget http://185.203.118.8/mmdvm/mmdvm_novalidation.sh -O /home/pi-star/mmdvm_novalidation.sh
+	wget https://raw.githubusercontent.com/iu7igu/pistar-novalidation/master/mmdvm_novalidation.sh -O /home/pi-star/mmdvm_novalidation.sh
 	chmod +x /home/pi-star/mmdvm_novalidation.sh
 	cd /home/pi-star/
 	./mmdvm_novalidation.sh up
