@@ -54,19 +54,19 @@ mmdvm_novalidation(){
 			rm pistar-update-mod*
 		fi
 		if [[ $2 == "hd" && -n "$2" ]]; then
-			wget http://iu7igummdvm.duckdns.org/mmdvm/pistar-update-mod-hd -O pistar-update-mod-hd > /dev/null 2>&1
+			wget https://raw.githubusercontent.com/iu7igu/pistar-novalidation/master/pistar-update-mod-hd -O pistar-update-mod-hd > /dev/null 2>&1
 			rm /usr/local/sbin/pistar-update
 			mv pistar-update-mod-hd /usr/local/sbin/pistar-update
 			chmod +x /usr/local/sbin/pistar-update
 		else
-			wget http://iu7igummdvm.duckdns.org/mmdvm/pistar-update-mod -O pistar-update-mod > /dev/null 2>&1
+			wget https://raw.githubusercontent.com/iu7igu/pistar-novalidation/master/pistar-update-mod -O pistar-update-mod > /dev/null 2>&1
 			rm /usr/local/sbin/pistar-update
 			mv pistar-update-mod /usr/local/sbin/pistar-update
 			chmod +x /usr/local/sbin/pistar-update
 		fi
 	fi
 	echo "Download DStarControl.cpp per il NOValidation"
-	wget http://iu7igummdvm.duckdns.org/mmdvm/DStarControl.cpp -O DStarControl.cpp > /dev/null 2>&1
+	wget https://raw.githubusercontent.com/iu7igu/pistar-novalidation/master/DStarControl.cpp -O DStarControl.cpp > /dev/null 2>&1
 	if [ -f ok.rules ]; then
 		rm ok.rules
 	fi
