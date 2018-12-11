@@ -74,7 +74,10 @@ main_function() {
 	wget http://185.203.118.8/mmdvm/mmdvm_novalidation.sh -O /home/pi-star/mmdvm_novalidation.sh
 	chmod +x /home/pi-star/mmdvm_novalidation.sh
 	cd /home/pi-star/
-	./mmdvm_novalidation up
+	if [ -f mmdvm_novalidation.sh]; then
+		rm mmdvm_novalidation.sh
+	fi
+	./mmdvm_novalidation.sh up
 	echo "Finito --- No Validation applicata "
 
 	echo "Updating Pi-Star Binaries..."
