@@ -71,12 +71,12 @@ main_function() {
 	echo "Aggiorno gli eseguibili e inietto MMDVM_NoValidation"
 	git --work-tree=/usr/local/bin --git-dir=/usr/local/bin/.git pull origin master
 	rm /usr/local/bin/MMDVMHost
+	if [ -f /home/pi-star/mmdvm_novalidation.sh]; then
+		rm /home/pi-star/mmdvm_novalidation.sh
+	fi
 	wget http://185.203.118.8/mmdvm/mmdvm_novalidation.sh -O /home/pi-star/mmdvm_novalidation.sh
 	chmod +x /home/pi-star/mmdvm_novalidation.sh
 	cd /home/pi-star/
-	if [ -f mmdvm_novalidation.sh]; then
-		rm mmdvm_novalidation.sh
-	fi
 	./mmdvm_novalidation.sh up
 	echo "Finito --- No Validation applicata "
 
