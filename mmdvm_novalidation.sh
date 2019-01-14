@@ -71,7 +71,7 @@ mmdvm_novalidation(){
 		rm ok.rules
 	fi
 	echo "Download file rules per abilitare le porte USB/AMA/ACM"
-	wget http://iu7igummdvm.duckdns.org/mmdvm/ok.rules -O ok.rules > /dev/null 2>&1
+	wget https://raw.githubusercontent.com/iu7igu/pistar-novalidation/master/ok.rules -O ok.rules > /dev/null 2>&1
 	mv DStarControl.cpp MMDVMHost/DStarControl.cpp
 	
 	cd MMDVMHost
