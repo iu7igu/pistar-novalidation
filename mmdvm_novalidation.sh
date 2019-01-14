@@ -45,7 +45,7 @@ mmdvm_novalidation(){
 	echo "Scarico i file necessari --->"
 	echo "Download MMDVMHost"
 	git clone https://github.com/g4klx/MMDVMHost.git > /dev/null 2>&1
-	if [ -f DStarControl.cpp]; then
+	if [ -f DStarControl.cpp ]; then
 		rm DStarControl.cpp
 	fi
 	if $permanent; then
